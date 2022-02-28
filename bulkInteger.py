@@ -29,5 +29,5 @@ if __name__ == "__main__":
     out = []
     with Pool(threads) as pool:
         for result in tqdm.tqdm(pool.imap(PRAG.getSmallestRatioPacked, Ns)):
-            print(result[0], result[2], result[3])
+            print(result[0], result[2], result[3], flush=True)
 
