@@ -263,7 +263,7 @@ def generateAutomata(p, q, b, ASet, BSet, verbose):
 
 # Given an automaton, steps through it and finds the minimal paths to each state, also returns the palindrome that leads to accept.
 # This is a simple Dijkstra's but a better implementation could probably save some time on the heap inserts.
-def getMinimalPaths(automata, base, ASet, BSet, fullScan):
+def getMinimalPaths(p, q, automata, base, ASet, BSet, fullScan):
     if not automata: # Pass through a not found result.
         return None
 
@@ -278,67 +278,61 @@ def getMinimalPaths(automata, base, ASet, BSet, fullScan):
     elif BSet == "apal":
         BTransform = lambda s: base-1-s
 
-    q = []
+    stateHeap = []
     pathTo = dict()
     processed = set()
     processed.add("start")
-    pathTo["start"] = (0, -1, 0, -1) # Saving the path to the state as an integer.
+    pathTo["start"] = (0, 0, -1) # if B = bcb^R then this is (len(B), b, c)
     for nextState in automata["start"]:
-        pathTo[nextState[2]] = (0, -1, 0, -1)
-        heapq.heappush(q, (0, -1, 0, -1, nextState[2])) # (B, middleB, A, middleA, state)
-    while q:
-        path = heapq.heappop(q)
-        if path[4] in processed:
+        pathTo[nextState[2]] = (0, 0, -1)
+        heapq.heappush(stateHeap, (0, 0, -1, nextState[2])) # (len(B), b, midB, state)
+    while stateHeap:
+        path = heapq.heappop(stateHeap)
+        if path[3] in processed:
             continue
-        processed.add(path[4])
+        processed.add(path[3])
 
-        if path[4] == (math.inf, "accept"):
+        if path[3] == (math.inf, "accept"):
             if fullScan:
                 continue
             else:
                 break
 
-        for nextState in automata[path[4]]:
+        for nextState in automata[path[3]]:
             # Skip anything we've already been to.
             if nextState[2] in processed:
                 continue
 
             # Add the current transition symbol to the path to the state.
-            B = path[0]
-            midB = path[1]
-            A = path[2]
-            midA = path[3]
+            lenB = path[0]
+            B = path[1]
+            midB = path[2]
             state = nextState[2]
             
             if nextState[1] != "":
                 if nextState[1] < 0:
                     midB = -1 - nextState[1] # Handle the middle index
+                    lenB += 1
                 else:
                     B = (B * base) + nextState[1]
-
-            if nextState[0] != "":
-                if nextState[0] < 0:
-                    midA = -1 - nextState[0]
-                else:
-                    A = (A * base) + nextState[0]
+                    lenB += 2
 
             if state == "accept":
                 state = (math.inf, "accept")
 
             # If this path is an improvement, add it to the heap.
-            if state not in pathTo or pathTo[state] > (B, midB, A, midA):
-                pathTo[state] = (B, midB, A, midA)
-                heapq.heappush(q, (B, midB, A, midA, state))
+            if state not in pathTo or pathTo[state] > (lenB, B, midB):
+                pathTo[state] = (lenB, B, midB)
+                heapq.heappush(stateHeap, (lenB, B, midB, state))
 
     if (math.inf, "accept") not in pathTo:
         return None, pathTo
 
     path = pathTo[(math.inf, "accept")]
-    A = numberToBase(path[2], base) if path[2] > 0 else []
-    A = A + ([path[3]] if path[3] != -1 else []) + [ATransform(s) for s in A[::-1]]
-    B = numberToBase(path[0], base) if path[0] > 0 else []
-    B = B + ([path[1]] if path[1] != -1 else []) + [BTransform(s) for s in B[::-1]]
-    return (listToInt(A, base), listToInt(B, base)), pathTo
+    B = numberToBase(path[1], base) if path[1] > 0 else []
+    B = B + ([path[2]] if path[2] != -1 else []) + [BTransform(s) for s in B[::-1]]
+    B = listToInt(B, base)
+    return ((p * B) // q, B), pathTo
 
 # Finds all states such that they have a path to the accept and gets that path length
 # This is designed for the loop checking to get the number of solutions.
@@ -414,7 +408,7 @@ def numberToBase(n, b):
 # Small function to make multiprocessing easier
 def getSmallestRatio(p, q, b, ASet, BSet):
     states = generateAutomata(p, q, b, ASet, BSet, False)
-    result, _ = getMinimalPaths(states, b, ASet, BSet, False)
+    result, _ = getMinimalPaths(p, q, states, b, ASet, BSet, False)
     if result:
         return (p, q, result[0], result[1])
     else:
@@ -448,7 +442,7 @@ if __name__ == "__main__":
             exit()
 
         states = generateAutomata(p, q, b, ASet, BSet, verbose)
-        result, toPath = getMinimalPaths(states, b, ASet, BSet, False)
+        result, toPath = getMinimalPaths(p, q, states, b, ASet, BSet, False)
         if result:
             print(p, q, result[0], result[1], flush=True)
         else:
