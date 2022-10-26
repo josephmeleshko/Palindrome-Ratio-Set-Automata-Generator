@@ -8,7 +8,7 @@ import sys
 
 # Given rational p/q > 1, this code generates an automaton to find a palindromic or antipalindromic A and B such that A/B = p/q.
 
-# state = (-q < carry_left_diff < p, 0 \leq B_carry_right < p, 0 \leq A_carry_right < q, savedSymbols, numSymbols, phase)
+# state = (-q < carry_left_diff < p, -q < carry_right_diff < p, savedSymbols, numSymbols, phase)
 
 def generateAutomata(p, q, b, ASet, BSet, verbose):  
     # p,q - positive integers, p > q.
@@ -21,18 +21,18 @@ def generateAutomata(p, q, b, ASet, BSet, verbose):
     
     def loadingPhase(state, toLoad): # Start by loading input into the saved symbols.
         states[state] = list()
-        initUnloadingPhase(state, True if toLoad == state[4] else False) # Early abort from loading phase. Implicitly fill with zeroes.
+        initUnloadingPhase(state, True if toLoad == state[3] else False) # Early abort from loading phase. Implicitly fill with zeroes.
 
-        for i in range(1 if toLoad == state[4] else 0, b): # Ensure that the input doesn't start with a zero.
-            currentA = (q * ATransform(i)) + state[2]
+        for i in range(1 if toLoad == state[3] else 0, b): # Ensure that the input doesn't start with a zero.
+            currentA = (q * ATransform(i))
             currentLeftCarry = (q * i) - (p * 0) + (b * state[0])
             if currentLeftCarry >= p or currentLeftCarry <= -q:
                 continue
-            for j in range(1 if toLoad == state[4] else 0, b):
+            for j in range(1 if toLoad == state[3] else 0, b):
                 currentB = (p * BTransform(j)) + state[1]
                 if (currentA % b) != (currentB % b):
                     continue
-                newState = (currentLeftCarry, currentB // b, currentA // b, (state[3] * b) + j, state[4], 1 if toLoad == 1 else 0)
+                newState = (currentLeftCarry, (currentB - currentA) // b, (state[2] * b) + j, state[3], 1 if toLoad == 1 else 0)
                 states[state].append((i, j, newState))
 
                 if toLoad == 1: # If loading is complete, switch phase.
@@ -51,10 +51,10 @@ def generateAutomata(p, q, b, ASet, BSet, verbose):
             states[state] = list()
             initUnloadingPhase(state, False)
 
-            topSymbol = state[3] // (b**(state[4] - 1))
-            newSavedSymbols = ((state[3] % (b**(state[4] - 1))) * b)
+            topSymbol = state[2] // (b**(state[3] - 1))
+            newSavedSymbols = ((state[2] % (b**(state[3] - 1))) * b)
             for i in range(b):
-                currentA = (q * ATransform(i)) + state[2]
+                currentA = (q * ATransform(i))
                 currentLeftCarry = (q * i) - (p * topSymbol) + (b * state[0])
                 if currentLeftCarry >= p or currentLeftCarry <= -q:
                     continue
@@ -62,7 +62,7 @@ def generateAutomata(p, q, b, ASet, BSet, verbose):
                     currentB = (p * BTransform(j)) + state[1]
                     if (currentA % b) != (currentB % b):
                         continue
-                    newState = (currentLeftCarry, currentB // b, currentA // b, newSavedSymbols + j, state[4], 1)
+                    newState = (currentLeftCarry, (currentB - currentA) // b, newSavedSymbols + j, state[3], 1)
                     states[state].append((i, j, newState))
                     queue.append(newState)
 
@@ -76,10 +76,10 @@ def generateAutomata(p, q, b, ASet, BSet, verbose):
             unloadingPhase(state) # len(B) not odd
 
         # len(B) odd
-        topSymbol = state[3] // (b**(state[4] - 1))
-        newSavedSymbols = (state[3] % (b**(state[4] - 1)))
+        topSymbol = state[2] // (b**(state[3] - 1))
+        newSavedSymbols = (state[2] % (b**(state[3] - 1)))
         for i in range(1 if first else 0, b):
-            currentA = (q * ATransform(i)) + state[2]
+            currentA = (q * ATransform(i))
             currentLeftCarry = (q * i) - (p * topSymbol) + (b * state[0])
             if currentLeftCarry >= p or currentLeftCarry <= -q:
                 continue
@@ -89,7 +89,7 @@ def generateAutomata(p, q, b, ASet, BSet, verbose):
                 currentB = (p * BTransform(j)) + state[1]
                 if currentA % b != currentB % b:
                     continue
-                newState = (currentLeftCarry, currentB // b, currentA // b, newSavedSymbols, state[4] - 1, 2)
+                newState = (currentLeftCarry, (currentB - currentA) // b, newSavedSymbols, state[3] - 1, 2)
                 states[state].append((i, -1 - j, newState)) # The negative number isn't input to the automata, just to help computation later.
                 if newState in states:
                     continue
@@ -100,39 +100,39 @@ def generateAutomata(p, q, b, ASet, BSet, verbose):
             print("init unloading", state)
                 
 
-    def unloadingPhase(state): # Unload until we reach one of the terminal cases. Each unload removes two symbols from state[3]. If A has odd length, state[4] will also be odd.
-        if state[4] == 0: #terminal, len(A) not odd
-            if state[0] == state[1] - state[2]:
+    def unloadingPhase(state): # Unload until we reach one of the terminal cases. Each unload removes two symbols from state[2]. If A has odd length, state[3] will also be odd.
+        if state[3] == 0: #terminal, len(A) not odd
+            if state[0] == state[1]:
                 states[state].append(("", "", "accept"))
                 if verbose:
                     print("found an accept")
 
-        elif state[4] == 1: #terminal, len(A) odd
-            currentB = (p * BTransform(state[3])) + state[1]
+        elif state[3] == 1: #terminal, len(A) odd
+            currentB = (p * BTransform(state[2])) + state[1]
             for i in range(b):
                 if ATransform(i) != i:
                     continue
-                currentA = (q * ATransform(i)) + state[2]
+                currentA = (q * ATransform(i))
                 if currentA % b != currentB % b:
                     continue
-                if state[0] == (currentB // b) - (currentA // b):
+                if state[0] == (currentB - currentA) // b:
                     states[state].append((-1 - i, "", "accept")) # The negative number isn't input to the automata, just to help computation later.
                     if verbose:
                         print("found an accept, sigma_A=" + str(i))
 
         else:
-            topSymbol = state[3] // (b**(state[4] - 1))
-            bottomSymbol = state[3] % b
-            newSavedSymbols = (state[3] % (b**(state[4] - 1)))//b
+            topSymbol = state[2] // (b**(state[3] - 1))
+            bottomSymbol = state[2] % b
+            newSavedSymbols = (state[2] % (b**(state[3] - 1)))//b
             currentB = (p * bottomSymbol) + state[1]
             for i in range(b):
-                currentA = (q * ATransform(i)) + state[2]
+                currentA = (q * ATransform(i))
                 if currentA % b != currentB % b:
                     continue
                 currentLeftCarry = (q * i) - (p * topSymbol) + (b * state[0])
                 if currentLeftCarry >= p or currentLeftCarry <= -q:
                     continue
-                newState = (currentLeftCarry, currentB // b, currentA // b, newSavedSymbols, state[4]-2, 2)
+                newState = (currentLeftCarry, (currentB - currentA) // b, newSavedSymbols, state[3]-2, 2)
                 states[state].append((i, "", newState))
                 if newState in states:
                     continue
@@ -150,41 +150,41 @@ def generateAutomata(p, q, b, ASet, BSet, verbose):
             states[state] = list()
 
             # Unloading
-            if state[0] == state[1] - state[2] and state[5] != -2: # Ensure that it's not the initial state.
+            if state[0] == state[1] and state[4] != -2: # Ensure that it's not the initial state.
                 states[state].append(("", "", "accept"))
             else:
-                for i in range(1 if state[5] == -2 else 0, b):
+                for i in range(1 if state[4] == -2 else 0, b):
                     if ATransform(i) != i:
                         continue
-                    currentA = (q * ATransform(i)) + state[2]
-                    for j in range(1 if state[5] == -2 else 0, b):
+                    currentA = (q * ATransform(i))
+                    for j in range(1 if state[4] == -2 else 0, b):
                         if BTransform(j) != j:
                             continue
                         currentB = (p * BTransform(j)) + state[1]
                         if currentA % b != currentB % b:
                             continue
-                        if state[0] == (currentB // b) - (currentA // b):
+                        if state[0] == (currentB - currentA) // b:
                             states[state].append((-1 - i, -1 - j, "accept")) # The negative number isn't input to the automata, just to help computation later.
 
             # Shift
-            for i in range(1 if state[5] == -2 else 0, b):
-                currentA = (q * ATransform(i)) + state[2]
-                for j in range(1 if state[5] == -2 else 0, b):
+            for i in range(1 if state[4] == -2 else 0, b):
+                currentA = (q * ATransform(i))
+                for j in range(1 if state[4] == -2 else 0, b):
                     currentB = (p * BTransform(j)) + state[1]
                     if currentA % b != currentB % b:
                         continue
                     currentLeftCarry = (q * i) - (p * j) + (b * state[0])
                     if currentLeftCarry >= p or currentLeftCarry <= -q:
                         continue
-                    newState = (currentLeftCarry, currentB // b, currentA // b, -1, -1, -1)
+                    newState = (currentLeftCarry, (currentB - currentA) // b, -1, -1, -1)
                     states[state].append((i, j, newState))
                     zeroQueue.append(newState)
 
             if verbose:
                 print("zero shifting", state)
 
-    if p <= q or b <= 1:
-        print("Requires b >= 2 and p > q")
+    if p <= q or b <= 1 or p <= 1 or q <= 0:
+        print("Requires b,p >= 2 and p > q > 0")
         return None
 
     if ASet not in ["pal", "apal"] or BSet not in ["pal", "apal"]:
@@ -239,25 +239,25 @@ def generateAutomata(p, q, b, ASet, BSet, verbose):
     # More detail on the equations, algorithm, and results can be found at: link.to.paper
 
     if lower == 0: # Special case for 1 < p/q < b
-        states["start"].append(("", "", (0, 0, 0, -1, -1, -2))) # The -2/-1 at state[5] keep the zero difference states separate from the rest.
-        states["start"].append(("", "", (0, 0, 0, 0, 1, 0)))
-        loadingPhase((0, 0, 0, 0, 1, 0), 1)
+        states["start"].append(("", "", (0, 0, -1, -1, -2))) # The -2/-1 at state[4] keep the zero difference states separate from the rest.
+        states["start"].append(("", "", (0, 0, 0, 1, 0)))
+        loadingPhase((0, 0, 0, 1, 0), 1)
         shiftingPhase()
-        zeroQueue.append((0, 0, 0, -1, -1, -2))
+        zeroQueue.append((0, 0, -1, -1, -2))
         zeroDifference()
         return states
 
     elif lower != upper:
-        states["start"].append(("", "", (0, 0, 0, 0, lower, 0)))
-        states["start"].append(("", "", (0, 0, 0, 0, upper, 0)))
-        loadingPhase((0, 0, 0, 0, lower, 0), lower)
-        loadingPhase((0, 0, 0, 0, upper, 0), upper)
+        states["start"].append(("", "", (0, 0, 0, lower, 0)))
+        states["start"].append(("", "", (0, 0, 0, upper, 0)))
+        loadingPhase((0, 0, 0, lower, 0), lower)
+        loadingPhase((0, 0, 0, upper, 0), upper)
         shiftingPhase()
         return states
 
     else: # Edge case if upper=lower
-        states["start"].append(("", "", (0, 0, 0, 0, lower, 0)))
-        loadingPhase((0, 0, 0, 0, lower, 0), lower)
+        states["start"].append(("", "", (0, 0, 0, lower, 0)))
+        loadingPhase((0, 0, 0, lower, 0), lower)
         shiftingPhase()
         return states
 

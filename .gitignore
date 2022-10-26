@@ -3,3 +3,6 @@
 .ipynb_checkpoints
 *.swp
 *.pickle
+__pycache__
+
+!data/*.txt
